@@ -1,77 +1,65 @@
 # GLM-ASR
 
-[中文阅读.](./README_zh.md)
-
 <div align="center">
 <img src=resources/logo.svg width="20%"/>
 </div>
 <p align="center">
-    👋 Join our <a href="resources/WECHAT.md" target="_blank">WeChat</a> community
+    👋 加入我们的 <a href="resources/WECHAT.md" target="_blank">微信</a> 社区
 </p>
 
-## Model Introduction
+## 模型介绍
 
-**GLM-ASR-Nano-2512** is a robust, open-source speech recognition model with **1.5B parameters**. Designed for
-real-world complexity, it outperforms OpenAI Whisper V3 on multiple benchmarks while maintaining a compact size.
+**GLM-ASR-Nano-2512** 是一款鲁棒的开源语音识别模型，参数量为 **1.5B**。
+该模型专为应对真实世界的复杂场景而设计，在多项基准测试中超越 OpenAI Whisper V3，同时保持紧凑的模型规模。
 
-Key capabilities include:
+核心能力包括：
 
-* **Exceptional Dialect Support**
-  Beyond standard Mandarin and English, the model is highly optimized for **Cantonese (粤语)** and other dialects,
-  effectively bridging the gap in dialectal speech recognition.
+* **卓越的方言支持**
+  除标准普通话和英语外，模型针对**粤语**及其他方言进行了深度优化，有效填补了方言语音识别领域的空白。
 
-* **Low-Volume Speech Robustness**
-  Specifically trained for **"Whisper/Quiet Speech"** scenarios. It captures and accurately transcribes extremely
-  low-volume audio that traditional models often miss.
+* **低音量语音鲁棒性**
+  专门针对**"低语/轻声"**场景进行训练，能够捕捉并准确转录传统模型难以识别的极低音量音频。
 
-* **SOTA Performance**
-  Achieves the **lowest average error rate (4.10)** among comparable open-source models, showing significant advantages
-  in Chinese benchmarks (Wenet Meeting, Aishell-1, etc..).
+* **SOTA 性能**
+  在同类开源模型中实现**最低平均错误率 (4.10)**，在中文基准测试（Wenet Meeting、Aishell-1 等）中展现出显著优势。
 
-## Benchmark
+## 基准测试
 
-We evaluated GLM-ASR-Nano against leading open-source and closed-source models. The results demonstrate
-that **GLM-ASR-Nano (1.5B)** achieves superior performance, particularly in challenging acoustic environments.
+我们将 GLM-ASR-Nano 与主流开源和闭源模型进行了对比评测。结果表明，**GLM-ASR-Nano (1.5B)** 表现优异，尤其在复杂声学环境下优势明显。
 
-![Benchmark results](resources/bench.png)
+![bench](resources/bench.png)
 
-Notes:
+说明：
 
-* Wenet Meeting reflects real-world meeting scenarios with noise and overlapping speech.
-* Aishell-1 is a standard Mandarin benchmark.
+* Wenet Meeting 反映了包含噪声和语音重叠的真实会议场景。
+* Aishell-1 是标准普通话基准测试集。
 
-## Supported Languages
-
-GLM-ASR-Nano supports **17 languages** with high usability (WER ≤ 20%), specifically optimized for the following regions:
-
-![Supported Languages List](resources/languages.png)
-
-## Download
+## 模型下载
 
 | Model             | Download Links                                                                                                                                             |
 |-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | GLM-ASR-Nano-2512  | [🤗 Hugging Face](https://huggingface.co/zai-org/GLM-ASR-Nano-2512)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/GLM-ASR-Nano-2512)               |
 
-## Inference
+## 推理
 
-`GLM-ASR-Nano-2512` can be easily integrated using the `transformers` library.  
-We will support `transformers 5.x` as well as inference frameworks such as `vLLM` and `SGLang`.
+`GLM-ASR-Nano-2512` 可通过 `transformers` 库轻松集成。  
+我们将支持 `transformers 5.x` 以及 `vLLM`、`SGLang` 等推理框架。
 
-### Requirements
+### 环境依赖
 
 ```bash
 pip install -r requirements.txt
 sudo apt install ffmpeg
 ```
 
-### Example Code
+### 示例代码
 
 ```shell
-python inference.py --checkpoint_dir zai-org/GLM-ASR-Nano-2512 --audio examples/example_en.wav # English
+python inference.py --checkpoint_dir zai-org/GLM-ASR-Nano-2512 --audio examples/example_en.wav # 英文
 python inference.py --checkpoint_dir zai-org/GLM-ASR-Nano-2512 --audio examples/example_zh.wav # 中文
 ```
 
-For the two example audio clips above, the model is able to produce accurate transcription results. They are:
+对于上述两段示例音频，模型能够生成准确的转录结果：
 
 ```shell
 be careful not to allow fabric to become too hot which can cause shrinkage or in extreme cases scorch
