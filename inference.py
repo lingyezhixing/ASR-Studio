@@ -2,6 +2,9 @@ import torch
 import torchaudio
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, WhisperFeatureExtractor
 from pathlib import Path
+import os
+import tempfile
+from tqdm import tqdm
 
 class GLMASR:
     WHISPER_FEAT_CFG = {
@@ -112,35 +115,72 @@ class GLMASR:
         return model_inputs, tokens.size(1)
 
     def transcribe(self, audio_path: str, operation_mode: str = "return") -> str | None:
-        batch = self.build_prompt(audio_path)
-        model_inputs, prompt_len = self.prepare_inputs(batch)
-        with torch.inference_mode():
-            generated = self.model.generate(
-                **model_inputs,
-                max_new_tokens=self.max_new_tokens,
-                do_sample=False,
+        audio_path = Path(audio_path)
+        wav, sr = torchaudio.load(str(audio_path))
+        duration = wav.shape[1] / sr
+
+        if duration > 25.0:
+            from audio_splitter import AudioSplitter
+            splitter = AudioSplitter()
+            segments = splitter.split(
+                audio_path=str(audio_path),
+                output_dir=None,
+                skip_vad=False,
+                target_length=20,
+                max_length=24,
+                overlap_length=0,
+                normalize_audio=True,
+                norm_processes=4,
+                operation_mode="return"
             )
-        transcript_ids = generated[0, prompt_len:].cpu().tolist()
-        transcript = self.tokenizer.decode(transcript_ids, skip_special_tokens=True).strip()
+
+            combined_transcription = []
+            for seg in tqdm(segments, desc="Processing audio segments"):
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+                    seg["audio_segment"].export(temp_file.name, format="wav")
+                    temp_path = temp_file.name
+
+                seg_transcription = self.transcribe(temp_path, operation_mode="return")
+                combined_transcription.append(seg_transcription)
+                os.unlink(temp_path)
+
+            # Smart merge with universal punctuation check
+            if combined_transcription:
+                transcription = combined_transcription[0]
+                for i in range(1, len(combined_transcription)):
+                    # Check if previous segment ends with any punctuation
+                    if combined_transcription[i-1].strip() and combined_transcription[i-1].strip()[-1] in [".", "!", "?", "。", "！", "？", "；", "：", "\"", "“", "”", "‘", "’", "，"]:
+                        transcription += combined_transcription[i]
+                    else:
+                        transcription += ',' + combined_transcription[i]
+            else:
+                transcription = ""
+        else:
+            batch = self.build_prompt(audio_path)
+            model_inputs, prompt_len = self.prepare_inputs(batch)
+            with torch.inference_mode():
+                generated = self.model.generate(
+                    **model_inputs,
+                    max_new_tokens=self.max_new_tokens,
+                    do_sample=False,
+                )
+            transcript_ids = generated[0, prompt_len:].cpu().tolist()
+            transcription = self.tokenizer.decode(transcript_ids, skip_special_tokens=True).strip()
         
         if operation_mode in ["save", "return_and_save"]:
             output_path = Path(audio_path).with_suffix('.txt')
             with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(transcript)
+                f.write(transcription)
         
         if operation_mode == "return":
-            return transcript
+            return transcription
         elif operation_mode == "save":
             return None
         else:  # return_and_save
-            return transcript
+            return transcription
 
 if __name__ == "__main__":
     asr = GLMASR(model_path="models/GLM-ASR-Nano-2512")
-    transcription = asr.transcribe("examples/example_en.wav")
-    print("----------")
-    print(transcription or "[Empty transcription]")
-    asr.transcribe("examples/example_zh.wav", operation_mode="save")
-    transcription = asr.transcribe("examples/example_zh.wav", operation_mode="return_and_save")
+    transcription = asr.transcribe("test_audio.wav")
     print("----------")
     print(transcription or "[Empty transcription]")
