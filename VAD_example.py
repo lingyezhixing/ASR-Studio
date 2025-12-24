@@ -32,7 +32,7 @@ class AudioSplitter:
             print("检测到首次使用VAD，正在加载 Silero VAD 模型（此操作仅执行一次）...")
             torch.set_num_threads(1)
             # Silero VAD is loaded from torch.hub
-            self._vad_model, _ = torch.hub.load(repo_or_dir='snakers4_silero-vad_master',
+            self._vad_model, _ = torch.hub.load(repo_or_dir='models/snakers4_silero-vad_master',
                                                 model='silero_vad',
                                                 force_reload=False,
                                                 onnx=self.use_onnx,
@@ -104,20 +104,63 @@ class AudioSplitter:
     def split(
         self,
         audio_path: str,
-        output_dir: str,
+        output_dir: str = None,
         target_length: float = 13.0,
         max_length: float = 15.0,
         overlap_length: float = 1.0,
         skip_vad: bool = False,
         normalize_audio: bool = True,
-        norm_processes: int = 4
+        norm_processes: int = 4,
+        operation_mode: str = "save"
     ):
+        """
+        分割音频文件，支持三种操作模式：'return'、'save'、'return_and_save'
+        
+        Args:
+            audio_path (str): 输入音频文件路径
+            output_dir (str, optional): 输出目录。当 operation_mode 为 "return" 时可为 None
+            target_length (float): 目标片段长度（秒），默认 13.0
+            max_length (float): 最大片段长度（秒），默认 15.0
+            overlap_length (float): 片段重叠长度（秒），默认 1.0
+            skip_vad (bool): 是否跳过 VAD 智能分割，使用固定长度分割
+            normalize_audio (bool): 是否对输出音频进行标准化（16kHz, mono, PCM_S16LE）
+            norm_processes (int): 标准化并发进程数
+            operation_mode (str): 操作模式，可选 "return"、"save"、"return_and_save"
+                                 - "return": 仅返回 AudioSegment 对象列表，不保存文件
+                                 - "save": 仅保存文件到 output_dir，不返回对象
+                                 - "return_and_save": 同时返回对象并保存文件
+        
+        Returns:
+            list or None:
+                - 当 operation_mode 为 "return" 或 "return_and_save" 时，返回包含 {filename, audio_segment, start, end} 的字典列表
+                - 当 operation_mode 为 "save" 时，返回 None
+        
+        Raises:
+            ValueError: 当参数组合无效时抛出异常
+            FileNotFoundError: 当输入文件不存在时抛出异常
+        """
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"错误：音频文件不存在于 '{audio_path}'")
+        
+        if not skip_vad and target_length >= max_length:
+            raise ValueError("错误：在VAD模式下, target_length 必须小于 max_length。")
+        
+        if skip_vad and target_length <= overlap_length:
+            raise ValueError("错误：在强制分割模式下, target_length 必须大于 overlap_length。")
+        
+        if operation_mode not in ["return", "save", "return_and_save"]:
+            raise ValueError("错误：operation_mode 必须为 'return'、'save' 或 'return_and_save' 之一。")
+        
+        if operation_mode in ["save", "return_and_save"] and not output_dir:
+            raise ValueError("错误：当 operation_mode 为 'save' 或 'return_and_save' 时，output_dir 必须提供。")
+        
+        chunks, force_split_count = [], 0
         if not os.path.exists(audio_path): raise FileNotFoundError(f"错误：音频文件不存在于 '{audio_path}'")
         if not skip_vad and target_length >= max_length: raise ValueError("错误：在VAD模式下, target_length 必须小于 max_length。")
         if skip_vad and target_length <= overlap_length: raise ValueError("错误：在强制分割模式下, target_length 必须大于 overlap_length。")
 
-        os.makedirs(output_dir, exist_ok=True)
-        chunks, force_split_count = [], 0
+        if operation_mode in ["save", "return_and_save"]:
+            os.makedirs(output_dir, exist_ok=True)
 
         if skip_vad:
             print("模式: 跳过VAD，使用固定长度分割... (无需加载VAD模型)")
@@ -150,21 +193,34 @@ class AudioSplitter:
                 else: current_chunk_segments.append(segment)
             if current_chunk_segments: chunks.append({'start': current_chunk_segments[0]['start'], 'end': current_chunk_segments[-1]['end']})
 
-        print(f"分割完成，共生成 {len(chunks)} 个片段。正在导出文件...")
+        print(f"分割完成，共生成 {len(chunks)} 个片段。正在处理...")
         original_audio = AudioSegment.from_file(audio_path)
         info_data, filepaths_to_normalize = [], []
         base_filename = os.path.splitext(os.path.basename(audio_path))[0]
-        
-        for i, chunk_info in enumerate(tqdm(chunks, desc=f"导出 {base_filename} 切片")):
+        returned_segments = []  # 存储返回的音频对象
+
+        for i, chunk_info in enumerate(tqdm(chunks, desc=f"处理 {base_filename} 切片")):
             start_ms, end_ms = int(chunk_info['start'] * 1000), int(chunk_info['end'] * 1000)
             chunk_audio = original_audio[start_ms:end_ms]
             output_filename = f"{base_filename}_chunk_{i+1:04d}.wav"
-            output_filepath = os.path.join(output_dir, output_filename)
-            chunk_audio.export(output_filepath, format="wav")
-            info_data.append({"file_path": output_filepath, "original_start_time": chunk_info['start'], "original_end_time": chunk_info['end'], "duration": chunk_info['end'] - chunk_info['start']})
-            filepaths_to_normalize.append(output_filepath)
+            
+            # 根据 operation_mode 决定是否保存文件
+            if operation_mode in ["save", "return_and_save"]:
+                output_filepath = os.path.join(output_dir, output_filename)
+                chunk_audio.export(output_filepath, format="wav")
+                info_data.append({"file_path": output_filepath, "original_start_time": chunk_info['start'], "original_end_time": chunk_info['end'], "duration": chunk_info['end'] - chunk_info['start']})
+                filepaths_to_normalize.append(output_filepath)
+            
+            # 根据 operation_mode 决定是否返回音频对象
+            if operation_mode in ["return", "return_and_save"]:
+                returned_segments.append({
+                    "filename": output_filename,
+                    "audio_segment": chunk_audio,
+                    "start": chunk_info['start'],
+                    "end": chunk_info['end']
+                })
         
-        if normalize_audio:
+        if normalize_audio and filepaths_to_normalize:
             print(f"\n正在对 {len(filepaths_to_normalize)} 个音频分段进行标准化 (使用 {norm_processes} 个进程)...")
             with Pool(processes=norm_processes) as pool:
                 results = list(tqdm(pool.imap_unordered(self._normalize_worker, filepaths_to_normalize), total=len(filepaths_to_normalize), desc="标准化"))
@@ -176,15 +232,27 @@ class AudioSplitter:
             else:
                 print("所有音频分段已成功标准化。")
         
-        info_filepath = os.path.join(output_dir, "_vad_complete.json")
-        with open(info_filepath, 'w', encoding='utf-8') as f: json.dump(info_data, f, indent=4, ensure_ascii=False)
+        # 仅在保存模式下生成信息文件
+        if operation_mode in ["save", "return_and_save"]:
+            info_filepath = os.path.join(output_dir, "_vad_complete.json")
+            with open(info_filepath, 'w', encoding='utf-8') as f: json.dump(info_data, f, indent=4, ensure_ascii=False)
 
         print("\n--- 分割统计 ---")
-        print(f"总计: 成功分割为 {len(chunks)} 个音频文件。")
+        print(f"总计: 成功分割为 {len(chunks)} 个片段。")
         if not skip_vad: print(f"总计: 对 {force_split_count} 个过长的原始片段执行了强制切分。")
         print("------------------")
-        print(f"\n处理完成！分段音频保存在: '{output_dir}'")
-        print(f"分段信息文件保存在: '{info_filepath}'")
+        
+        if operation_mode in ["save", "return_and_save"]:
+            print(f"\n处理完成！分段音频保存在: '{output_dir}'")
+            print(f"分段信息文件保存在: '{info_filepath}'")
+        
+        # 根据操作模式返回结果
+        if operation_mode == "return":
+            return returned_segments
+        elif operation_mode == "save":
+            return None
+        else:  # return_and_save
+            return returned_segments
 
 
 # --- 程序主入口：演示新功能 ---
@@ -193,27 +261,67 @@ if __name__ == "__main__":
     # 1. 实例化分割器
     splitter = AudioSplitter()
 
-    # --- 运行VAD智能分割，并启用后续的标准化处理 ---
+    # --- 演示：保存模式 ---
     print("\n" + "="*50)
-    print("场景: VAD智能分割 + 音频标准化")
+    print("场景: 保存模式（仅保存文件）")
     print("="*50)
-
-    # 确保演示文件存在，如果不存在则创建一个假的
-    audio_file_to_process = r"audio.wav"
+    audio_file_to_process = r"test_audio.wav"
     if not os.path.exists(audio_file_to_process):
         print(f"警告: 演示音频 '{audio_file_to_process}' 不存在。将创建一个1分钟的静音文件用于演示。")
         AudioSegment.silent(duration=60000).export(audio_file_to_process, format="wav")
-
     try:
         splitter.split(
             audio_path=audio_file_to_process,
-            output_dir=r"audio_split_output_vad",
+            output_dir=r"audio_split_output_save",
             skip_vad=False,
             target_length=13,
             max_length=15,
             overlap_length=1,
-            normalize_audio=True,      # <-- 启用标准化
-            norm_processes=8           # <-- 设置并发进程数 (请根据您的CPU核心数调整)
+            normalize_audio=True,
+            norm_processes=8,
+            operation_mode="save"
         )
+    except Exception as e:
+        print(f"\n程序运行出错: {e}")
+
+    # --- 演示：返回模式 ---
+    print("\n" + "="*50)
+    print("场景: 返回模式（仅返回对象，不保存文件）")
+    print("="*50)
+    try:
+        segments = splitter.split(
+            audio_path=audio_file_to_process,
+            output_dir=None,
+            skip_vad=False,
+            target_length=13,
+            max_length=15,
+            overlap_length=1,
+            normalize_audio=True,
+            norm_processes=8,
+            operation_mode="return"
+        )
+        print(f"成功返回 {len(segments)} 个音频片段对象。")
+        print(f"第一个片段: {segments[0]['filename']}, 长度: {segments[0]['audio_segment'].duration_seconds:.2f}s")
+    except Exception as e:
+        print(f"\n程序运行出错: {e}")
+
+    # --- 演示：返回并保存模式 ---
+    print("\n" + "="*50)
+    print("场景: 返回并保存模式（同时返回对象并保存文件）")
+    print("="*50)
+    try:
+        segments = splitter.split(
+            audio_path=audio_file_to_process,
+            output_dir=r"audio_split_output_return_and_save",
+            skip_vad=False,
+            target_length=13,
+            max_length=15,
+            overlap_length=1,
+            normalize_audio=True,
+            norm_processes=8,
+            operation_mode="return_and_save"
+        )
+        print(f"成功返回 {len(segments)} 个音频片段对象，并已保存至文件。")
+        print(f"第一个片段: {segments[0]['filename']}, 长度: {segments[0]['audio_segment'].duration_seconds:.2f}s")
     except Exception as e:
         print(f"\n程序运行出错: {e}")
