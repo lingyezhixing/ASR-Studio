@@ -41,7 +41,7 @@ class AudioSplitter:
             torch.set_num_threads(1)
             # Silero VAD is loaded from torch.hub
             self._vad_model, _ = torch.hub.load(
-                repo_or_dir='snakers4_silero-vad_master',
+                repo_or_dir='models/snakers4_silero-vad_master',
                 model='silero_vad',
                 force_reload=False,
                 onnx=self.use_onnx,
@@ -333,6 +333,7 @@ class AudioSplitter:
                 return None
             else:  # return_and_save
                 return returned_segments
+
 # --- 程序主入口：演示新功能 ---
 if __name__ == "__main__":
     
