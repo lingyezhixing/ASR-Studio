@@ -72,6 +72,9 @@ node_modules/
 .env
 .config
 
+# 忽略models文件夹
+/models/
+
 # 忽略VS Code工作区文件
 ASR-Studio.code-workspace
 
@@ -92,6 +95,8 @@ ASR-Studio.code-workspace
 **/*.db
 **/*.sqlite
 **/*.sqlite3
+
+# 忽略指定文件
 
 # 忽略代码统计工具
 quick_stats.py
