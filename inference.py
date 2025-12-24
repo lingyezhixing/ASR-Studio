@@ -144,11 +144,9 @@ class GLMASR:
                 combined_transcription.append(seg_transcription)
                 os.unlink(temp_path)
 
-            # Smart merge with universal punctuation check
             if combined_transcription:
                 transcription = combined_transcription[0]
                 for i in range(1, len(combined_transcription)):
-                    # Check if previous segment ends with any punctuation
                     if combined_transcription[i-1].strip() and combined_transcription[i-1].strip()[-1] in [".", "!", "?", "。", "！", "？", "；", "：", "\"", "“", "”", "‘", "’", "，"]:
                         transcription += combined_transcription[i]
                     else:
