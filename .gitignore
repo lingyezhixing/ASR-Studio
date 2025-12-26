@@ -97,6 +97,7 @@ ASR-Studio.code-workspace
 **/*.sqlite3
 
 # 忽略指定文件
+Env.bat
 
 # 忽略代码统计工具
 quick_stats.py
