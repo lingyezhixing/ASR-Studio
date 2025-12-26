@@ -130,7 +130,6 @@ class AudioSplitter:
         overlap_length: float = 0.0,
         skip_vad: bool = False,
         normalize_audio: bool = True,
-        norm_processes: int = 4, # 保留参数签名，但内部不再使用多进程，改为pydub处理
         operation_mode: str = "save"
     ) -> list[dict] | None:
         """
@@ -332,7 +331,6 @@ if __name__ == "__main__":
             max_length=15.0,
             overlap_length=0.0, # 测试重叠
             normalize_audio=True, # 测试归一化
-            norm_processes=8, # 该参数已弃用但不报错
             operation_mode="save"
         )
     except Exception as e:
@@ -353,7 +351,6 @@ if __name__ == "__main__":
             max_length=15.0,
             overlap_length=0.0,
             normalize_audio=True,
-            norm_processes=8,
             operation_mode="return"
         )
         print(f"成功返回 {len(segments)} 个音频片段对象。")
@@ -377,7 +374,6 @@ if __name__ == "__main__":
             max_length=15.0,
             overlap_length=0.0,
             normalize_audio=True,
-            norm_processes=8,
             operation_mode="return_and_save"
         )
         print(f"成功返回 {len(segments)} 个音频片段对象，并已保存至文件。")

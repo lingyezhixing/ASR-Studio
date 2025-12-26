@@ -119,18 +119,17 @@ class GLMASR:
         wav, sr = torchaudio.load(str(audio_path))
         duration = wav.shape[1] / sr
 
-        if duration > 25.0:
+        if duration > 20.0:
             from audio_splitter import AudioSplitter
             splitter = AudioSplitter()
             segments = splitter.split(
                 audio_path=str(audio_path),
                 output_dir=None,
                 skip_vad=False,
-                target_length=20,
-                max_length=24,
+                target_length=12,
+                max_length=15,
                 overlap_length=0,
                 normalize_audio=True,
-                norm_processes=4,
                 operation_mode="return"
             )
 
